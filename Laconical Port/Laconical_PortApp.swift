@@ -11,7 +11,7 @@ import SwiftUI
 struct Laconical_PortApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            LaconicalPlayerRootView()
         }
     }
 }
