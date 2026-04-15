@@ -67,15 +67,21 @@ struct MiniPlayerView: View {
                 .padding(.horizontal, 12)
                 .frame(height: 72)
 
-                ZStack(alignment: .leading) {
-                    Rectangle()
-                        .fill(.white.opacity(0.08))
-                        .frame(height: 3)
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .fill(.white.opacity(0.08))
+                            .frame(height: 3)
 
-                    Rectangle()
-                        .fill(baseColor.opacity(0.9))
-                        .frame(width: max(0, progress) * UIScreen.main.bounds.width, height: 3)
+                        Rectangle()
+                            .fill(baseColor.opacity(0.9))
+                            .frame(
+                                width: proxy.size.width * min(max(progress, 0), 1),
+                                height: 3
+                            )
+                    }
                 }
+                .frame(height: 3)
             }
         }
         .frame(height: 75)

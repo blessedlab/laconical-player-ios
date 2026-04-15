@@ -82,7 +82,7 @@ struct FullPlayerView: View {
                 Color.clear
                     .frame(maxWidth: .infinity)
                     .aspectRatio(1, contentMode: .fit)
-                    .frame(width: UIScreen.main.bounds.width * 0.9)
+                    .padding(.horizontal, 6)
 
                 Spacer().frame(height: 54)
 
