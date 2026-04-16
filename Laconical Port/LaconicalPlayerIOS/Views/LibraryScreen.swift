@@ -6,8 +6,14 @@ struct LibraryScreen: View {
 
     @State private var didBootstrap = false
     @State private var sheetProgress: CGFloat = 0
-    @State private var dragOffsetProgress: CGFloat = 0
+    @GestureState private var dragTranslationY: CGFloat = 0
     @State private var cachedSafeBottomInset: CGFloat = 0
+
+    private var playerSheetAnimation: Animation {
+        .interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)
+    }
+
+    private let quickSwipeDistance: CGFloat = 64
 
     var body: some View {
         GeometryReader { proxy in
@@ -24,8 +30,10 @@ struct LibraryScreen: View {
                 : (peekHeight + safeBottom)
 
             let baseProgress = viewModel.currentTrack == nil ? 0 : sheetProgress
-            let interactiveProgress = clamp(baseProgress + dragOffsetProgress, lower: 0, upper: 1)
+            let dragProgress = clamp(-dragTranslationY / max(travel, 1), lower: -1, upper: 1)
+            let interactiveProgress = clamp(baseProgress + dragProgress, lower: 0, upper: 1)
             let sheetTop = collapsedTop - (travel * interactiveProgress)
+            let collapsedMiniControlsY = collapsedTop + 37.5
             let miniAlpha = clamp(1 - interactiveProgress * 2, lower: 0, upper: 1)
 
             let targetBackground = (viewModel.playingTrackDominantColor ?? Color(red: 0.04, green: 0.04, blue: 0.05))
@@ -53,7 +61,8 @@ struct LibraryScreen: View {
                             track: currentTrack,
                             proxy: proxy,
                             sheetTop: sheetTop,
-                            expandedFraction: interactiveProgress
+                            expandedFraction: interactiveProgress,
+                            collapsedMiniControlsY: collapsedMiniControlsY
                         )
 
                         if miniAlpha > 0.01 {
@@ -109,9 +118,8 @@ struct LibraryScreen: View {
             }
             .onChange(of: viewModel.currentTrack?.id) { newValue in
                 if newValue == nil {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    withAnimation(playerSheetAnimation) {
                         sheetProgress = 0
-                        dragOffsetProgress = 0
                     }
                 }
             }
@@ -442,7 +450,8 @@ struct LibraryScreen: View {
         track: Track,
         proxy: GeometryProxy,
         sheetTop: CGFloat,
-        expandedFraction: CGFloat
+        expandedFraction: CGFloat,
+        collapsedMiniControlsY: CGFloat
     ) -> some View {
         let width = proxy.size.width
         let safeTop = proxy.safeAreaInsets.top
@@ -488,7 +497,7 @@ struct LibraryScreen: View {
             expandedFraction
         )
 
-        let miniCenterY = sheetTop + 37.5
+        let miniCenterY = collapsedMiniControlsY
         let miniPrevX = width - 144
         let miniPlayX = width - 96
         let miniNextX = width - 48
@@ -646,55 +655,51 @@ struct LibraryScreen: View {
     }
 
     private func expandSheet() {
-        withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
+        withAnimation(playerSheetAnimation) {
             sheetProgress = 1
-            dragOffsetProgress = 0
         }
     }
 
     private func collapseSheet() {
-        withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
+        withAnimation(playerSheetAnimation) {
             sheetProgress = 0
-            dragOffsetProgress = 0
         }
     }
 
     private func sheetDragGesture(travel: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 3)
-            .onChanged { value in
+            .updating($dragTranslationY) { value, state, _ in
                 guard abs(value.translation.height) >= abs(value.translation.width) * 0.65 else { return }
-                dragOffsetProgress = clamp(-value.translation.height / max(travel, 1), lower: -1, upper: 1)
+                state = value.translation.height
             }
             .onEnded { value in
                 guard abs(value.translation.height) >= abs(value.translation.width) * 0.65 else {
-                    withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
-                        dragOffsetProgress = 0
-                    }
                     return
                 }
 
                 let translationProgress = clamp(-value.translation.height / max(travel, 1), lower: -1, upper: 1)
                 let committedProgress = clamp(sheetProgress + translationProgress, lower: 0, upper: 1)
 
-                // Commit dragged state atomically before starting the snap animation.
+                // Commit to the finger-driven position before the final snap animation.
                 var noAnimation = Transaction()
                 noAnimation.disablesAnimations = true
                 withTransaction(noAnimation) {
                     sheetProgress = committedProgress
-                    dragOffsetProgress = 0
                 }
 
+                let predictedBlend = (value.translation.height * 0.65) + (value.predictedEndTranslation.height * 0.35)
                 let residualTranslation = value.predictedEndTranslation.height - value.translation.height
                 let residualProgress = -residualTranslation / max(travel, 1)
-                let projectedProgress = clamp(
-                    committedProgress + (residualProgress * 0.25),
-                    lower: 0,
-                    upper: 1
-                )
-                let shouldExpand = projectedProgress > 0.5 || translationProgress > 0.18
+                let projectedProgress = clamp(committedProgress + (residualProgress * 0.25), lower: 0, upper: 1)
 
-                withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
-                    sheetProgress = shouldExpand ? 1 : 0
+                if predictedBlend <= -quickSwipeDistance {
+                    expandSheet()
+                } else if predictedBlend >= quickSwipeDistance {
+                    collapseSheet()
+                } else {
+                    withAnimation(playerSheetAnimation) {
+                        sheetProgress = projectedProgress >= 0.5 ? 1 : 0
+                    }
                 }
             }
     }
@@ -703,13 +708,11 @@ struct LibraryScreen: View {
         let target: CGFloat = sheetProgress >= 0.5 ? 1 : 0
 
         if animated {
-            withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
+            withAnimation(playerSheetAnimation) {
                 sheetProgress = target
-                dragOffsetProgress = 0
             }
         } else {
             sheetProgress = target
-            dragOffsetProgress = 0
         }
     }
 
