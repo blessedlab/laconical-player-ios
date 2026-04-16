@@ -51,7 +51,8 @@ struct LibraryScreen: View {
                         track: currentTrack,
                         proxy: proxy,
                         sheetTop: sheetTop,
-                        expandedFraction: interactiveProgress
+                        expandedFraction: interactiveProgress,
+                        travel: travel
                     )
 
                     if miniAlpha > 0.01 {
@@ -64,6 +65,7 @@ struct LibraryScreen: View {
                             .onTapGesture {
                                 expandSheet()
                             }
+                            .simultaneousGesture(sheetDragGesture(travel: travel))
                     }
                 }
             }
@@ -328,6 +330,11 @@ struct LibraryScreen: View {
             },
             onRemoveFromPlaylist: { playlistID in
                 viewModel.removeTrack(track, from: playlistID)
+            },
+            onDeleteTrack: {
+                Task {
+                    await viewModel.deleteTrack(track)
+                }
             }
         )
     }
@@ -410,21 +417,7 @@ struct LibraryScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .offset(y: sheetTop)
-        .gesture(
-            DragGesture()
-                .onChanged { value in
-                    dragOffsetProgress = -value.translation.height / max(travel, 1)
-                }
-                .onEnded { value in
-                    let projected = sheetProgress + (-value.predictedEndTranslation.height / max(travel, 1))
-                    let shouldExpand = projected > 0.5
-
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                        sheetProgress = shouldExpand ? 1 : 0
-                        dragOffsetProgress = 0
-                    }
-                }
-        )
+        .simultaneousGesture(sheetDragGesture(travel: travel))
     }
 
     @ViewBuilder
@@ -432,7 +425,8 @@ struct LibraryScreen: View {
         track: Track,
         proxy: GeometryProxy,
         sheetTop: CGFloat,
-        expandedFraction: CGFloat
+        expandedFraction: CGFloat,
+        travel: CGFloat
     ) -> some View {
         let width = proxy.size.width
         let safeTop = proxy.safeAreaInsets.top
@@ -455,8 +449,9 @@ struct LibraryScreen: View {
         let themeColor = viewModel.playingTrackDominantColor ?? Color(red: 0.12, green: 0.12, blue: 0.12)
         let amplitude = viewModel.currentNormalizedAmplitude
         let shapedAmplitude = amplitude * amplitude
-        let pulseIntensity = clamp((expandedFraction - 0.7) / 0.3, lower: 0, upper: 1)
-        let pulseScale = 1 - (0.02 * pulseIntensity) + (shapedAmplitude * 0.04 * pulseIntensity)
+        let pulseIntensity = viewModel.isPlaying ? lerp(0.55, 1, expandedFraction) : 0
+        let rawPulseScale = 1 - (0.018 * pulseIntensity) + (shapedAmplitude * 0.12 * pulseIntensity)
+        let pulseScale = clamp(rawPulseScale, lower: 0.965, upper: 1.14)
         let expandedDropOffset: CGFloat = 40
         let titleExtraLiftOffset: CGFloat = 8
 
@@ -524,8 +519,10 @@ struct LibraryScreen: View {
                 )
             }
             .frame(width: morphSize, height: morphSize)
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
             .scaleEffect(pulseScale)
             .offset(x: morphLeft, y: morphTop)
+            .simultaneousGesture(sheetDragGesture(travel: travel))
 
             Text(track.title)
                 .font(.system(size: titleSize, weight: .bold))
@@ -543,6 +540,7 @@ struct LibraryScreen: View {
             }
             .buttonStyle(.plain)
             .frame(width: prevNextSize, height: prevNextSize)
+            .contentShape(Rectangle())
             .offset(x: prevX - prevNextSize / 2, y: controlsY - prevNextSize / 2)
 
             Button {
@@ -558,6 +556,7 @@ struct LibraryScreen: View {
             }
             .buttonStyle(.plain)
             .frame(width: playContainerSize, height: playContainerSize)
+            .contentShape(Circle())
             .offset(x: playX - playContainerSize / 2, y: controlsY - playContainerSize / 2)
 
             Button {
@@ -569,6 +568,7 @@ struct LibraryScreen: View {
             }
             .buttonStyle(.plain)
             .frame(width: prevNextSize, height: prevNextSize)
+            .contentShape(Rectangle())
             .offset(x: nextX - prevNextSize / 2, y: controlsY - prevNextSize / 2)
         }
     }
@@ -639,6 +639,30 @@ struct LibraryScreen: View {
             sheetProgress = 0
             dragOffsetProgress = 0
         }
+    }
+
+    private func sheetDragGesture(travel: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 3)
+            .onChanged { value in
+                guard abs(value.translation.height) >= abs(value.translation.width) else { return }
+                dragOffsetProgress = -value.translation.height / max(travel, 1)
+            }
+            .onEnded { value in
+                guard abs(value.translation.height) >= abs(value.translation.width) else {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        dragOffsetProgress = 0
+                    }
+                    return
+                }
+
+                let projected = sheetProgress + (-value.predictedEndTranslation.height / max(travel, 1))
+                let shouldExpand = projected > 0.5
+
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    sheetProgress = shouldExpand ? 1 : 0
+                    dragOffsetProgress = 0
+                }
+            }
     }
 
     private func clamp(_ value: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {

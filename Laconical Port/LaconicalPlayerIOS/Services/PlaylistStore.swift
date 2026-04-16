@@ -59,4 +59,14 @@ final class PlaylistStore {
         save(updated)
         return updated
     }
+
+    func remove(trackID: UInt64, fromAll playlists: [Playlist]) -> [Playlist] {
+        let updated = playlists.map { playlist in
+            var mutable = playlist
+            mutable.trackIDs.removeAll { $0 == trackID }
+            return mutable
+        }
+        save(updated)
+        return updated
+    }
 }

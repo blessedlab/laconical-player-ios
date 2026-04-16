@@ -13,6 +13,7 @@ struct Track: Identifiable, Equatable, Hashable {
     let dateAdded: Date?
     let albumPersistentID: UInt64
     let artistPersistentID: UInt64
+    let isImportedFile: Bool
 
     var isPlayable: Bool {
         mediaURL != nil
@@ -39,5 +40,6 @@ extension Track {
         dateAdded = item.dateAdded
         albumPersistentID = item.albumPersistentID
         artistPersistentID = item.artistPersistentID
+        isImportedFile = false
     }
 }

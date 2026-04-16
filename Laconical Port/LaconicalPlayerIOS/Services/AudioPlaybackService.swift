@@ -139,7 +139,8 @@ final class AudioPlaybackService: ObservableObject {
     }
 
     func togglePlayPause() {
-        isPlaying ? pause() : play()
+        let currentlyPlaying = player.timeControlStatus == .playing || player.rate > 0
+        currentlyPlaying ? pause() : play()
     }
 
     func skipToNext() {

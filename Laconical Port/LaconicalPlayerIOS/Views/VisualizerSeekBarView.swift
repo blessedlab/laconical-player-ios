@@ -90,7 +90,7 @@ struct VisualizerSeekBarView: View {
 
     private func waveformPath(in size: CGSize, phase: CGFloat) -> Path {
         var path = Path()
-        let samples = waveform.isEmpty ? Array(repeating: Float(0.5), count: 64) : waveform
+        let samples = effectiveSamples(phase: phase)
         let step = size.width / CGFloat(max(samples.count - 1, 1))
         let middleY = size.height * 0.55
         let amplitude = size.height * 0.4
@@ -109,5 +109,21 @@ struct VisualizerSeekBarView: View {
         }
 
         return path
+    }
+
+    private func effectiveSamples(phase: CGFloat) -> [Float] {
+        let dynamicRange = (waveform.max() ?? 0) - (waveform.min() ?? 0)
+        let shouldUseSyntheticWave = waveform.isEmpty || dynamicRange < 0.03
+
+        guard shouldUseSyntheticWave else {
+            return waveform
+        }
+
+        let sampleCount = max(waveform.count, 64)
+        return (0..<sampleCount).map { index in
+            let t = (phase * 0.08) + CGFloat(index) * 0.24
+            let value = 0.5 + (0.28 * sin(t)) + (0.1 * cos((t * 0.63) + CGFloat(index) * 0.15))
+            return Float(min(max(value, 0), 1))
+        }
     }
 }

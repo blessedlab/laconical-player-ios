@@ -11,6 +11,7 @@ struct TrackListItemView: View {
     let onTrackTap: () -> Void
     let onAddToPlaylist: (UUID) -> Void
     let onRemoveFromPlaylist: (UUID) -> Void
+    let onDeleteTrack: () -> Void
 
     private var titleColor: Color {
         guard isActiveTrack else { return .white }
@@ -70,6 +71,16 @@ struct TrackListItemView: View {
                     Spacer(minLength: 6)
 
                     Menu {
+                        if track.isImportedFile {
+                            Button(role: .destructive) {
+                                onDeleteTrack()
+                            } label: {
+                                Text("Delete Track")
+                            }
+
+                            Divider()
+                        }
+
                         if playlists.isEmpty {
                             Text("Create a playlist first")
                         } else {

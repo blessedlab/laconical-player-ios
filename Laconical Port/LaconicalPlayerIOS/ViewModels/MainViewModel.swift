@@ -163,12 +163,18 @@ final class MainViewModel: ObservableObject {
     func importAudioFiles(from urls: [URL]) async {
         guard !urls.isEmpty else { return }
 
-        let imported = mediaLibraryService.importAudioFiles(from: urls)
+        let result = mediaLibraryService.importAudioFiles(from: urls)
         await loadLibrary()
 
-        importStatusMessage = imported > 0
-            ? "Imported \(imported) file\(imported == 1 ? "" : "s") to Imports."
-            : "No files were imported."
+        if result.imported > 0, result.duplicatesSkipped > 0 {
+            importStatusMessage = "Imported \(result.imported) file\(result.imported == 1 ? "" : "s"). Skipped \(result.duplicatesSkipped) duplicate\(result.duplicatesSkipped == 1 ? "" : "s")."
+        } else if result.imported > 0 {
+            importStatusMessage = "Imported \(result.imported) file\(result.imported == 1 ? "" : "s") to Imports."
+        } else if result.duplicatesSkipped > 0 {
+            importStatusMessage = "Skipped \(result.duplicatesSkipped) duplicate file\(result.duplicatesSkipped == 1 ? "" : "s")."
+        } else {
+            importStatusMessage = "No files were imported."
+        }
         showImportStatus = true
     }
 
@@ -254,6 +260,32 @@ final class MainViewModel: ObservableObject {
 
     func removeTrack(_ track: Track, from playlistID: UUID) {
         playlists = playlistStore.remove(trackID: track.id, from: playlistID, in: playlists)
+    }
+
+    func deleteTrack(_ track: Track) async {
+        guard track.isImportedFile else {
+            importStatusMessage = "Only imported tracks can be deleted."
+            showImportStatus = true
+            return
+        }
+
+        let deleted = mediaLibraryService.deleteImportedTrack(track)
+        guard deleted else {
+            importStatusMessage = "Couldn't delete \"\(track.title)\"."
+            showImportStatus = true
+            return
+        }
+
+        playbackService.removeFromQueue(trackID: track.id)
+        if currentTrack?.id == track.id {
+            playbackService.stop()
+        }
+
+        playlists = playlistStore.remove(trackID: track.id, fromAll: playlists)
+        await loadLibrary()
+
+        importStatusMessage = "Deleted \"\(track.title)\"."
+        showImportStatus = true
     }
 
     func playlistContains(_ track: Track, playlistID: UUID) -> Bool {
@@ -351,14 +383,26 @@ final class MainViewModel: ObservableObject {
             guard let self else { return }
 
             while !Task.isCancelled {
-                if isPlaying,
-                   duration > 0,
-                   !waveformData.isEmpty {
-                    let ratio = currentPosition / duration
-                    let clampedRatio = min(max(ratio, 0), 1)
-                    let index = Int(Double(waveformData.count - 1) * clampedRatio)
-                    let target = CGFloat(waveformData[safe: index] ?? 0)
-                    currentNormalizedAmplitude = (currentNormalizedAmplitude * 0.75) + (target * 0.25)
+                if isPlaying {
+                    let target: CGFloat
+
+                    if duration > 0, !waveformData.isEmpty {
+                        let ratio = currentPosition / duration
+                        let clampedRatio = min(max(ratio, 0), 1)
+                        let index = Int(Double(waveformData.count - 1) * clampedRatio)
+                        target = CGFloat(waveformData[safe: index] ?? 0)
+                    } else if !playbackWaveform.isEmpty {
+                        let average = playbackWaveform.reduce(0, +) / Float(playbackWaveform.count)
+                        target = CGFloat(min(max((average - 0.5) * 2.4, 0), 1))
+                    } else {
+                        target = 0
+                    }
+
+                    let clampedTarget = min(max(target, 0), 1)
+                    let boostedTarget = CGFloat(pow(Double(clampedTarget), 0.72))
+                    let response: CGFloat = boostedTarget > currentNormalizedAmplitude ? 0.42 : 0.2
+
+                    currentNormalizedAmplitude = (currentNormalizedAmplitude * (1 - response)) + (boostedTarget * response)
                 } else {
                     currentNormalizedAmplitude = max(0, currentNormalizedAmplitude * 0.92)
                     if currentNormalizedAmplitude < 0.005 {

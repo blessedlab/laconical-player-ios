@@ -20,6 +20,15 @@ struct MiniPlayerView: View {
         return vibeColor.mixed(with: .black, amount: 0.4)
     }
 
+    private var outlineColor: Color {
+        guard let vibeColor else {
+            return Color.white.opacity(0.2)
+        }
+        return vibeColor.mixed(with: .white, amount: 0.45).opacity(0.78)
+    }
+
+    private let miniPlayerCornerRadius: CGFloat = 18
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             Rectangle()
@@ -42,6 +51,7 @@ struct MiniPlayerView: View {
                         artworkView
                     }
                     .buttonStyle(.plain)
+                    .allowsHitTesting(!hideArtwork)
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(track.title)
@@ -53,6 +63,7 @@ struct MiniPlayerView: View {
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Color(red: 0.73, green: 0.73, blue: 0.73))
                             .lineLimit(1)
+                            .padding(.leading, 7)
                     }
 
                     Spacer(minLength: 4)
@@ -63,6 +74,7 @@ struct MiniPlayerView: View {
                         IconControlButton(systemName: "forward.fill", size: 24, action: onNext)
                     }
                     .opacity(hideControls ? 0 : 1)
+                    .allowsHitTesting(!hideControls)
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 72)
@@ -86,6 +98,13 @@ struct MiniPlayerView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 75)
+        .clipShape(RoundedRectangle(cornerRadius: miniPlayerCornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: miniPlayerCornerRadius, style: .continuous)
+                .stroke(outlineColor, lineWidth: 1.2)
+        )
+        .shadow(color: outlineColor.opacity(0.2), radius: 12, y: 4)
+        .padding(.horizontal, 12)
         .padding(.bottom, 12)
     }
 
