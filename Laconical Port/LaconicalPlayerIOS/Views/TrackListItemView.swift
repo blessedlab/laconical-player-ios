@@ -49,7 +49,9 @@ struct TrackListItemView: View {
                     ParticlesEffectView(
                         color: dominantColor,
                         isPlaybackActive: isPlaybackActive,
-                        particleCount: 18
+                        particleCount: 30,
+                        speedMultiplier: 0.2,
+                        spreadMultiplier: 0.85
                     )
                 }
 

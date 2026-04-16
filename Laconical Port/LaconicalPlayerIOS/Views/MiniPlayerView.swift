@@ -55,12 +55,12 @@ struct MiniPlayerView: View {
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(track.title)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.custom("AvenirNext-DemiBold", size: 15))
                             .foregroundStyle(.white.opacity(hideArtwork ? 0 : 1))
                             .lineLimit(1)
 
                         Text(track.artist)
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.custom("AvenirNext-Medium", size: 13))
                             .foregroundStyle(Color(red: 0.73, green: 0.73, blue: 0.73))
                             .lineLimit(1)
                     }

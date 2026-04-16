@@ -41,7 +41,7 @@ struct FullPlayerView: View {
     }
 
     private let expandedMediaLiftOffset: CGFloat = 40
-    private let waveformDropOffset: CGFloat = 19
+    private let waveformDropOffset: CGFloat = 27
     private let artistRowLiftOffset: CGFloat = 28
     private let artistExtraLiftOffset: CGFloat = 14
     private let heartExtraLiftOffset: CGFloat = 8
@@ -58,7 +58,9 @@ struct FullPlayerView: View {
             ParticlesEffectView(
                 color: activeSeekColor,
                 isPlaybackActive: isPlaying,
-                particleCount: 25
+                particleCount: 42,
+                speedMultiplier: 0.22,
+                spreadMultiplier: 1.1
             )
 
             VStack(spacing: 0) {
@@ -72,7 +74,7 @@ struct FullPlayerView: View {
                     .buttonStyle(.plain)
 
                     Text(track.album.uppercased())
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.custom("AvenirNext-Medium", size: 12))
                         .foregroundStyle(.gray)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
@@ -102,12 +104,12 @@ struct FullPlayerView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         // Invisible ghost title for layout matching with morph overlay
                         Text(track.title)
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.custom("AvenirNext-DemiBold", size: 20))
                             .foregroundStyle(.clear)
                             .lineLimit(1)
 
                         Text(track.artist)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.custom("AvenirNext-Medium", size: 14))
                             .foregroundStyle(.gray)
                             .lineLimit(1)
                     }
@@ -185,7 +187,7 @@ struct FullPlayerView: View {
 
                     Button(action: onShowQueue) {
                         Text("UP NEXT")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.custom("AvenirNext-DemiBold", size: 12))
                             .foregroundStyle(.gray)
                     }
                     .buttonStyle(.plain)
@@ -194,7 +196,7 @@ struct FullPlayerView: View {
 
                     Button(action: {}) {
                         Text("LYRICS")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.custom("AvenirNext-DemiBold", size: 12))
                             .foregroundStyle(.gray)
                     }
                     .buttonStyle(.plain)

@@ -33,7 +33,9 @@ struct LibraryScreen: View {
             let baseProgress = viewModel.currentTrack == nil ? 0 : sheetProgress
             let dragProgress = clamp(-dragTranslationY / max(travel, 1), lower: -1, upper: 1)
             let interactiveProgress = clamp(baseProgress + dragProgress, lower: 0, upper: 1)
+            let mediaExpandedFraction = interactiveProgress
             let sheetTop = collapsedTop - (travel * interactiveProgress)
+            let collapsedMiniArtTop = collapsedTop + 11.5
             let collapsedMiniControlsY = collapsedTop + 37.5
             let miniAlpha = clamp(1 - interactiveProgress * 2, lower: 0, upper: 1)
 
@@ -61,8 +63,9 @@ struct LibraryScreen: View {
                         morphingOverlay(
                             track: currentTrack,
                             proxy: proxy,
-                            sheetTop: sheetTop,
                             expandedFraction: interactiveProgress,
+                            mediaExpandedFraction: mediaExpandedFraction,
+                            collapsedMiniArtTop: collapsedMiniArtTop,
                             collapsedMiniControlsY: collapsedMiniControlsY
                         )
 
@@ -450,8 +453,9 @@ struct LibraryScreen: View {
     private func morphingOverlay(
         track: Track,
         proxy: GeometryProxy,
-        sheetTop: CGFloat,
         expandedFraction: CGFloat,
+        mediaExpandedFraction: CGFloat,
+        collapsedMiniArtTop: CGFloat,
         collapsedMiniControlsY: CGFloat
     ) -> some View {
         let width = proxy.size.width
@@ -459,24 +463,28 @@ struct LibraryScreen: View {
 
         let miniArtSize: CGFloat = 52
         let miniArtLeft: CGFloat = 24
-        let miniArtTop = sheetTop + 11.5
+        let miniArtTop = collapsedMiniArtTop
         let expandedMediaLiftOffset: CGFloat = 40
 
         let fullArtSize = (width - 48) * 0.95
         let fullArtLeft = (width - fullArtSize) / 2
         let fullArtTop = safeTop + 16 + 48 + 64 - expandedMediaLiftOffset
 
-        let morphSize = lerp(miniArtSize, fullArtSize, expandedFraction)
-        let morphLeft = lerp(miniArtLeft, fullArtLeft, expandedFraction)
-        let morphTop = lerp(miniArtTop, fullArtTop, expandedFraction)
-        let cornerRadius = lerp(10, 24, expandedFraction)
+        let morphSize = lerp(miniArtSize, fullArtSize, mediaExpandedFraction)
+        let morphLeft = lerp(miniArtLeft, fullArtLeft, mediaExpandedFraction)
+        let morphTop = lerp(miniArtTop, fullArtTop, mediaExpandedFraction)
+        let cornerRadius = lerp(10, 24, mediaExpandedFraction)
 
         let themeColor = viewModel.playingTrackDominantColor ?? Color(red: 0.12, green: 0.12, blue: 0.12)
         let amplitude = viewModel.currentNormalizedAmplitude
         let shapedAmplitude = amplitude * amplitude
-        let pulseIntensity = viewModel.isPlaying ? lerp(0.55, 1, expandedFraction) : 0
-        let rawPulseScale = 1 - (0.018 * pulseIntensity) + (shapedAmplitude * 0.12 * pulseIntensity)
-        let pulseScale = clamp(rawPulseScale, lower: 0.965, upper: 1.14)
+        let pulseIntensity = viewModel.isPlaying ? lerp(0.45, 1, mediaExpandedFraction) : 0
+        let baseShrink = lerp(1, 0.992, mediaExpandedFraction)
+        let rawPulseScale = baseShrink - (0.012 * pulseIntensity) + (shapedAmplitude * 0.1 * pulseIntensity)
+        let pulseScale = clamp(rawPulseScale, lower: 0.96, upper: 1.13)
+        let beatLift = viewModel.isPlaying
+            ? -(2 + (6 * shapedAmplitude)) * mediaExpandedFraction
+            : -mediaExpandedFraction
         let expandedDropOffset: CGFloat = 40
         let titleExtraLiftOffset: CGFloat = 8
         let expandedTitleRaiseOffset: CGFloat = 142
@@ -487,15 +495,15 @@ struct LibraryScreen: View {
         let fullTitleLeft: CGFloat = 48
         let fullTitleTop = fullArtTop + fullArtSize + 70 + expandedDropOffset + expandedMediaLiftOffset - titleExtraLiftOffset - expandedTitleRaiseOffset
 
-        let titleLeft = lerp(miniTitleLeft, fullTitleLeft, expandedFraction)
-        let titleTop = lerp(miniTitleTop, fullTitleTop, expandedFraction)
-        let titleSize = lerp(15, 20, expandedFraction)
-        let titleHorizontalAdjust = lerp(0, -20, expandedFraction)
-        let titleVerticalAdjust = lerp(0, 31, expandedFraction)
+        let titleLeft = lerp(miniTitleLeft, fullTitleLeft, mediaExpandedFraction)
+        let titleTop = lerp(miniTitleTop, fullTitleTop, mediaExpandedFraction)
+        let titleSize = lerp(15, 20, mediaExpandedFraction)
+        let titleHorizontalAdjust = lerp(0, -20, mediaExpandedFraction)
+        let titleVerticalAdjust = lerp(0, 31, mediaExpandedFraction)
         let titleMaxWidth = lerp(
             width - miniTitleLeft - 170,
             width - fullTitleLeft - 86,
-            expandedFraction
+            mediaExpandedFraction
         )
 
         let miniCenterY = collapsedMiniControlsY
@@ -550,10 +558,10 @@ struct LibraryScreen: View {
             .frame(width: morphSize, height: morphSize)
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
             .scaleEffect(pulseScale)
-            .offset(x: morphLeft, y: morphTop)
+            .offset(x: morphLeft, y: morphTop + beatLift)
 
             Text(track.title)
-                .font(.system(size: titleSize, weight: .bold))
+                .font(.custom("AvenirNext-DemiBold", size: titleSize))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .frame(maxWidth: titleMaxWidth, alignment: .leading)

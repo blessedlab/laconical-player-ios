@@ -4,44 +4,68 @@ struct ParticlesEffectView: View {
     let color: Color
     let isPlaybackActive: Bool
     let particleCount: Int
+    let speedMultiplier: Double
+    let spreadMultiplier: CGFloat
 
-    private let seeds: [Double]
-
-    init(color: Color, isPlaybackActive: Bool, particleCount: Int = 24) {
+    init(
+        color: Color,
+        isPlaybackActive: Bool,
+        particleCount: Int = 36,
+        speedMultiplier: Double = 0.28,
+        spreadMultiplier: CGFloat = 1.0
+    ) {
         self.color = color
         self.isPlaybackActive = isPlaybackActive
         self.particleCount = particleCount
-        self.seeds = (0..<particleCount).map { _ in Double.random(in: 0...1) }
+        self.speedMultiplier = speedMultiplier
+        self.spreadMultiplier = spreadMultiplier
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isPlaybackActive)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 45.0, paused: !isPlaybackActive)) { timeline in
             Canvas { context, size in
-                let time = timeline.date.timeIntervalSinceReferenceDate
+                let time = timeline.date.timeIntervalSinceReferenceDate * speedMultiplier
+                let width = max(size.width, 1)
+                let height = max(size.height, 1)
+                let count = max(particleCount, 0)
 
-                for index in seeds.indices {
-                    let seed = seeds[index]
-                    let speed = 0.15 + seed * 0.85
-                    let radius = 1.5 + seed * 3.6
-                    let alpha = max(0.06, 0.35 - seed * 0.22)
+                for index in 0..<count {
+                    let xSeed = seededValue(index: index, salt: 0.31)
+                    let ySeed = seededValue(index: index, salt: 1.73)
+                    let sizeSeed = seededValue(index: index, salt: 2.19)
+                    let alphaSeed = seededValue(index: index, salt: 5.17)
+                    let phase = seededValue(index: index, salt: 3.97) * (Double.pi * 2)
+                    let speed = 0.25 + seededValue(index: index, salt: 4.61) * 0.55
 
-                    let x = CGFloat(
-                        (seed * Double(size.width))
-                            + sin(time * speed * 1.3 + seed * 10) * 38
-                    ).truncatingRemainder(dividingBy: size.width + 20) - 10
+                    let radius = CGFloat(1.2 + sizeSeed * 2.8)
+                    let alpha = CGFloat(0.08 + alphaSeed * 0.2)
 
-                    let y = CGFloat(
-                        (seed * Double(size.height))
-                            + cos(time * speed + seed * 8) * 26
-                    ).truncatingRemainder(dividingBy: size.height + 20) - 10
+                    let driftX = sin((time * speed) + phase) * (width * 0.11 * spreadMultiplier)
+                    let driftY = cos((time * speed * 0.82) + (phase * 1.2)) * (height * 0.09 * spreadMultiplier)
+
+                    let x = wrappedPosition((CGFloat(xSeed) * width) + driftX, limit: width + 24) - 12
+                    let y = wrappedPosition((CGFloat(ySeed) * height) + driftY, limit: height + 24) - 12
+
+                    let particleRect = CGRect(x: x, y: y, width: radius, height: radius)
 
                     context.fill(
-                        Path(ellipseIn: CGRect(x: x, y: y, width: radius, height: radius)),
+                        Path(ellipseIn: particleRect),
                         with: .color(color.opacity(alpha * (isPlaybackActive ? 1 : 0.2)))
                     )
                 }
             }
         }
         .allowsHitTesting(false)
+    }
+
+    private func seededValue(index: Int, salt: Double) -> Double {
+        let raw = sin((Double(index) + 1) * 12.9898 + salt * 78.233) * 43758.5453
+        return raw - floor(raw)
+    }
+
+    private func wrappedPosition(_ value: CGFloat, limit: CGFloat) -> CGFloat {
+        guard limit > 0 else { return value }
+        let remainder = value.truncatingRemainder(dividingBy: limit)
+        return remainder < 0 ? remainder + limit : remainder
     }
 }

@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import UIKit
 
 @MainActor
 final class AudioPlaybackService: ObservableObject {
@@ -26,6 +27,9 @@ final class AudioPlaybackService: ObservableObject {
         addTimeObserver()
         observePlaybackEnd()
         observeAudioInterruptions()
+        observeApplicationLifecycle()
+
+        UIApplication.shared.beginReceivingRemoteControlEvents()
 
         nowPlayingService.configureRemoteCommands(
             onPlay: { [weak self] in
@@ -117,6 +121,8 @@ final class AudioPlaybackService: ObservableObject {
             loadCurrentTrack(autoplay: true)
             return
         }
+
+        activateAudioSession()
         player.play()
         isPlaying = true
         refreshNowPlaying()
@@ -245,6 +251,7 @@ final class AudioPlaybackService: ObservableObject {
         player.replaceCurrentItem(with: item)
 
         if autoplay {
+            activateAudioSession()
             player.play()
             isPlaying = true
         } else {
@@ -348,6 +355,15 @@ final class AudioPlaybackService: ObservableObject {
         }
     }
 
+    private func activateAudioSession() {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setActive(true)
+        } catch {
+            // Keep playback flow running even if activation fails intermittently.
+        }
+    }
+
     private func observePlaybackEnd() {
         NotificationCenter.default.addObserver(
             self,
@@ -362,6 +378,22 @@ final class AudioPlaybackService: ObservableObject {
             self,
             selector: #selector(handleAudioInterruption(_:)),
             name: AVAudioSession.interruptionNotification,
+            object: nil
+        )
+    }
+
+    private func observeApplicationLifecycle() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
             object: nil
         )
     }
@@ -396,5 +428,17 @@ final class AudioPlaybackService: ObservableObject {
         @unknown default:
             break
         }
+    }
+
+    @objc
+    private func handleDidEnterBackground() {
+        guard isPlaying else { return }
+        activateAudioSession()
+        refreshNowPlaying()
+    }
+
+    @objc
+    private func handleWillEnterForeground() {
+        activateAudioSession()
     }
 }
