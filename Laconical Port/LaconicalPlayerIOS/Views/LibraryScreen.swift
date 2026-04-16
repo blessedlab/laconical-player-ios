@@ -69,6 +69,20 @@ struct LibraryScreen: View {
                         }
                     }
                     .simultaneousGesture(sheetDragGesture(travel: travel))
+
+                    if miniAlpha > 0.01 {
+                        LaconicalBottomNav(
+                            selectedCategory: Binding(
+                                get: { viewModel.selectedCategory },
+                                set: { viewModel.setSelectedCategory($0) }
+                            ),
+                            dynamicColor: viewModel.playingTrackDominantColor
+                        )
+                        .opacity(miniAlpha)
+                        .allowsHitTesting(miniAlpha > 0.02)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                    }
                 }
             }
             .onAppear {
@@ -395,38 +409,27 @@ struct LibraryScreen: View {
             .frame(width: proxy.size.width, height: proxy.size.height + safeBottom)
 
             if miniAlpha > 0.01 {
-                VStack(spacing: 0) {
-                    MiniPlayerView(
-                        track: track,
-                        isPlaying: viewModel.isPlaying,
-                        progress: viewModel.progress,
-                        vibeColor: viewModel.playingTrackDominantColor,
-                        hideArtwork: true,
-                        hideControls: true,
-                        onTap: {
-                            expandSheet()
-                        },
-                        onPrevious: {
-                            viewModel.skipToPrevious()
-                        },
-                        onTogglePlay: {
-                            viewModel.togglePlayPause()
-                        },
-                        onNext: {
-                            viewModel.skipToNext()
-                        }
-                    )
-                    .opacity(miniAlpha)
-
-                    LaconicalBottomNav(
-                        selectedCategory: Binding(
-                            get: { viewModel.selectedCategory },
-                            set: { viewModel.setSelectedCategory($0) }
-                        ),
-                        dynamicColor: viewModel.playingTrackDominantColor
-                    )
-                    .opacity(miniAlpha)
-                }
+                MiniPlayerView(
+                    track: track,
+                    isPlaying: viewModel.isPlaying,
+                    progress: viewModel.progress,
+                    vibeColor: viewModel.playingTrackDominantColor,
+                    hideArtwork: true,
+                    hideControls: true,
+                    onTap: {
+                        expandSheet()
+                    },
+                    onPrevious: {
+                        viewModel.skipToPrevious()
+                    },
+                    onTogglePlay: {
+                        viewModel.togglePlayPause()
+                    },
+                    onNext: {
+                        viewModel.skipToNext()
+                    }
+                )
+                .opacity(miniAlpha)
                 .frame(maxWidth: .infinity, alignment: .top)
             }
         }
@@ -643,14 +646,14 @@ struct LibraryScreen: View {
     }
 
     private func expandSheet() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+        withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
             sheetProgress = 1
             dragOffsetProgress = 0
         }
     }
 
     private func collapseSheet() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+        withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
             sheetProgress = 0
             dragOffsetProgress = 0
         }
@@ -664,34 +667,34 @@ struct LibraryScreen: View {
             }
             .onEnded { value in
                 guard abs(value.translation.height) >= abs(value.translation.width) * 0.65 else {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
                         dragOffsetProgress = 0
                     }
                     return
                 }
 
-                let translationProgress = -value.translation.height / max(travel, 1)
-                let currentProgress = clamp(sheetProgress + translationProgress, lower: 0, upper: 1)
+                let translationProgress = clamp(-value.translation.height / max(travel, 1), lower: -1, upper: 1)
+                let committedProgress = clamp(sheetProgress + translationProgress, lower: 0, upper: 1)
 
-                // Commit current drag first so ending the gesture doesn't cause a visual snap.
+                // Commit dragged state atomically before starting the snap animation.
                 var noAnimation = Transaction()
                 noAnimation.disablesAnimations = true
                 withTransaction(noAnimation) {
-                    sheetProgress = currentProgress
+                    sheetProgress = committedProgress
+                    dragOffsetProgress = 0
                 }
 
                 let residualTranslation = value.predictedEndTranslation.height - value.translation.height
                 let residualProgress = -residualTranslation / max(travel, 1)
                 let projectedProgress = clamp(
-                    currentProgress + residualProgress,
+                    committedProgress + (residualProgress * 0.25),
                     lower: 0,
                     upper: 1
                 )
-                let shouldExpand = projectedProgress > 0.35
+                let shouldExpand = projectedProgress > 0.5 || translationProgress > 0.18
 
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
                     sheetProgress = shouldExpand ? 1 : 0
-                    dragOffsetProgress = 0
                 }
             }
     }
@@ -700,7 +703,7 @@ struct LibraryScreen: View {
         let target: CGFloat = sheetProgress >= 0.5 ? 1 : 0
 
         if animated {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92, blendDuration: 0.08)) {
                 sheetProgress = target
                 dragOffsetProgress = 0
             }
