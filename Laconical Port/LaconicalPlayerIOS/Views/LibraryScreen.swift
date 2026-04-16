@@ -7,10 +7,12 @@ struct LibraryScreen: View {
     @State private var didBootstrap = false
     @State private var sheetProgress: CGFloat = 0
     @State private var dragOffsetProgress: CGFloat = 0
+    @State private var cachedSafeBottomInset: CGFloat = 0
 
     var body: some View {
         GeometryReader { proxy in
-            let safeBottom = proxy.safeAreaInsets.bottom
+            let rawSafeBottom = proxy.safeAreaInsets.bottom
+            let safeBottom = rawSafeBottom > 0 ? rawSafeBottom : cachedSafeBottomInset
 
             let miniPlayerHeight: CGFloat = 87
             let bottomNavHeight: CGFloat = 64
@@ -37,36 +39,46 @@ struct LibraryScreen: View {
                 mainContent(bottomPadding: contentBottomPadding)
 
                 if let currentTrack = viewModel.currentTrack {
-                    sheetLayer(
-                        track: currentTrack,
-                        proxy: proxy,
-                        sheetTop: sheetTop,
-                        miniAlpha: miniAlpha,
-                        expandedFraction: interactiveProgress,
-                        travel: travel,
-                        safeBottom: safeBottom
-                    )
+                    ZStack(alignment: .topLeading) {
+                        sheetLayer(
+                            track: currentTrack,
+                            proxy: proxy,
+                            sheetTop: sheetTop,
+                            miniAlpha: miniAlpha,
+                            expandedFraction: interactiveProgress,
+                            safeBottom: safeBottom
+                        )
 
-                    morphingOverlay(
-                        track: currentTrack,
-                        proxy: proxy,
-                        sheetTop: sheetTop,
-                        expandedFraction: interactiveProgress,
-                        travel: travel
-                    )
+                        morphingOverlay(
+                            track: currentTrack,
+                            proxy: proxy,
+                            sheetTop: sheetTop,
+                            expandedFraction: interactiveProgress
+                        )
 
-                    if miniAlpha > 0.01 {
-                        // Reliable tap zone for expanding from mini-player body.
-                        // Keep the right control area free so play/prev/next remain tappable.
-                        Color.clear
-                            .frame(width: max(proxy.size.width - 140, 0), height: 75)
-                            .contentShape(Rectangle())
-                            .offset(y: sheetTop)
-                            .onTapGesture {
-                                expandSheet()
-                            }
-                            .simultaneousGesture(sheetDragGesture(travel: travel))
+                        if miniAlpha > 0.01 {
+                            // Reliable tap zone for expanding from mini-player body.
+                            // Keep the right control area free so play/prev/next remain tappable.
+                            Color.clear
+                                .frame(width: max(proxy.size.width - 140, 0), height: 75)
+                                .contentShape(Rectangle())
+                                .offset(y: sheetTop)
+                                .onTapGesture {
+                                    expandSheet()
+                                }
+                        }
                     }
+                    .simultaneousGesture(sheetDragGesture(travel: travel))
+                }
+            }
+            .onAppear {
+                if rawSafeBottom > 0 {
+                    cachedSafeBottomInset = rawSafeBottom
+                }
+            }
+            .onChange(of: rawSafeBottom) { newValue in
+                if newValue > 0 {
+                    cachedSafeBottomInset = newValue
                 }
             }
             .task {
@@ -74,7 +86,11 @@ struct LibraryScreen: View {
                 didBootstrap = true
                 await viewModel.bootstrap()
             }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+                snapSheetToNearestAnchor(animated: false)
+            }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                snapSheetToNearestAnchor(animated: false)
                 Task { await viewModel.loadLibrary() }
             }
             .onChange(of: viewModel.currentTrack?.id) { newValue in
@@ -346,7 +362,6 @@ struct LibraryScreen: View {
         sheetTop: CGFloat,
         miniAlpha: CGFloat,
         expandedFraction: CGFloat,
-        travel: CGFloat,
         safeBottom: CGFloat
     ) -> some View {
         ZStack(alignment: .top) {
@@ -417,7 +432,6 @@ struct LibraryScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .offset(y: sheetTop)
-        .simultaneousGesture(sheetDragGesture(travel: travel))
     }
 
     @ViewBuilder
@@ -425,12 +439,10 @@ struct LibraryScreen: View {
         track: Track,
         proxy: GeometryProxy,
         sheetTop: CGFloat,
-        expandedFraction: CGFloat,
-        travel: CGFloat
+        expandedFraction: CGFloat
     ) -> some View {
         let width = proxy.size.width
         let safeTop = proxy.safeAreaInsets.top
-        let safeBottom = proxy.safeAreaInsets.bottom
 
         let miniArtSize: CGFloat = 52
         let miniArtLeft: CGFloat = 24
@@ -454,15 +466,19 @@ struct LibraryScreen: View {
         let pulseScale = clamp(rawPulseScale, lower: 0.965, upper: 1.14)
         let expandedDropOffset: CGFloat = 40
         let titleExtraLiftOffset: CGFloat = 8
+        let expandedTitleRaiseOffset: CGFloat = 142
+        let fullControlsLiftOffset: CGFloat = 9
 
         let miniTitleLeft = miniArtLeft + miniArtSize + 12
         let miniTitleTop = miniArtTop + 2
         let fullTitleLeft: CGFloat = 48
-        let fullTitleTop = fullArtTop + fullArtSize + 70 + expandedDropOffset + expandedMediaLiftOffset - titleExtraLiftOffset
+        let fullTitleTop = fullArtTop + fullArtSize + 70 + expandedDropOffset + expandedMediaLiftOffset - titleExtraLiftOffset - expandedTitleRaiseOffset
 
         let titleLeft = lerp(miniTitleLeft, fullTitleLeft, expandedFraction)
         let titleTop = lerp(miniTitleTop, fullTitleTop, expandedFraction)
         let titleSize = lerp(15, 20, expandedFraction)
+        let titleHorizontalAdjust = lerp(0, -20, expandedFraction)
+        let titleVerticalAdjust = lerp(0, 31, expandedFraction)
         let titleMaxWidth = lerp(
             width - miniTitleLeft - 170,
             width - fullTitleLeft - 86,
@@ -474,7 +490,7 @@ struct LibraryScreen: View {
         let miniPlayX = width - 96
         let miniNextX = width - 48
 
-        let fullCenterY = proxy.size.height - 110 + expandedDropOffset
+        let fullCenterY = proxy.size.height - 110 + expandedDropOffset - fullControlsLiftOffset
         let fullPrevX = width * 0.22
         let fullPlayX = width * 0.5
         let fullNextX = width * 0.78
@@ -522,14 +538,13 @@ struct LibraryScreen: View {
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
             .scaleEffect(pulseScale)
             .offset(x: morphLeft, y: morphTop)
-            .simultaneousGesture(sheetDragGesture(travel: travel))
 
             Text(track.title)
                 .font(.system(size: titleSize, weight: .bold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .frame(maxWidth: titleMaxWidth, alignment: .leading)
-                .offset(x: titleLeft, y: titleTop)
+                .offset(x: titleLeft + titleHorizontalAdjust, y: titleTop + titleVerticalAdjust)
 
             Button {
                 viewModel.skipToPrevious()
@@ -644,25 +659,55 @@ struct LibraryScreen: View {
     private func sheetDragGesture(travel: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 3)
             .onChanged { value in
-                guard abs(value.translation.height) >= abs(value.translation.width) else { return }
-                dragOffsetProgress = -value.translation.height / max(travel, 1)
+                guard abs(value.translation.height) >= abs(value.translation.width) * 0.65 else { return }
+                dragOffsetProgress = clamp(-value.translation.height / max(travel, 1), lower: -1, upper: 1)
             }
             .onEnded { value in
-                guard abs(value.translation.height) >= abs(value.translation.width) else {
+                guard abs(value.translation.height) >= abs(value.translation.width) * 0.65 else {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                         dragOffsetProgress = 0
                     }
                     return
                 }
 
-                let projected = sheetProgress + (-value.predictedEndTranslation.height / max(travel, 1))
-                let shouldExpand = projected > 0.5
+                let translationProgress = -value.translation.height / max(travel, 1)
+                let currentProgress = clamp(sheetProgress + translationProgress, lower: 0, upper: 1)
+
+                // Commit current drag first so ending the gesture doesn't cause a visual snap.
+                var noAnimation = Transaction()
+                noAnimation.disablesAnimations = true
+                withTransaction(noAnimation) {
+                    sheetProgress = currentProgress
+                }
+
+                let residualTranslation = value.predictedEndTranslation.height - value.translation.height
+                let residualProgress = -residualTranslation / max(travel, 1)
+                let projectedProgress = clamp(
+                    currentProgress + residualProgress,
+                    lower: 0,
+                    upper: 1
+                )
+                let shouldExpand = projectedProgress > 0.35
 
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                     sheetProgress = shouldExpand ? 1 : 0
                     dragOffsetProgress = 0
                 }
             }
+    }
+
+    private func snapSheetToNearestAnchor(animated: Bool) {
+        let target: CGFloat = sheetProgress >= 0.5 ? 1 : 0
+
+        if animated {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                sheetProgress = target
+                dragOffsetProgress = 0
+            }
+        } else {
+            sheetProgress = target
+            dragOffsetProgress = 0
+        }
     }
 
     private func clamp(_ value: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {

@@ -41,9 +41,13 @@ struct FullPlayerView: View {
     }
 
     private let expandedMediaLiftOffset: CGFloat = 40
+    private let waveformDropOffset: CGFloat = 19
     private let artistRowLiftOffset: CGFloat = 28
     private let artistExtraLiftOffset: CGFloat = 14
     private let heartExtraLiftOffset: CGFloat = 8
+    private let artistDropOffset: CGFloat = 28
+    private let artistRightOffset: CGFloat = -5
+    private let heartDropOffset: CGFloat = 40
 
     var body: some View {
         ZStack {
@@ -105,7 +109,7 @@ struct FullPlayerView: View {
                             .foregroundStyle(.gray)
                             .lineLimit(1)
                     }
-                    .offset(y: -artistExtraLiftOffset)
+                            .offset(x: artistRightOffset, y: -artistExtraLiftOffset + artistDropOffset)
 
                     Spacer()
 
@@ -115,7 +119,7 @@ struct FullPlayerView: View {
                             .foregroundStyle(.white)
                     }
                     .buttonStyle(.plain)
-                    .offset(y: -heartExtraLiftOffset)
+                    .offset(y: -heartExtraLiftOffset + heartDropOffset)
                 }
                 .padding(.horizontal, 24)
                 .offset(y: -artistRowLiftOffset)
@@ -145,7 +149,7 @@ struct FullPlayerView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 8)
                 }
-                .offset(y: -expandedMediaLiftOffset)
+                .offset(y: -expandedMediaLiftOffset + waveformDropOffset)
 
                 // Ghost controls for spacing; morphing overlay provides actual controls.
                 HStack {
