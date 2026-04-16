@@ -32,6 +32,9 @@ struct TrackListItemView: View {
     var body: some View {
         Button(action: onTrackTap) {
             ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(Color.white.opacity(0.015))
+
                 if isActiveTrack {
                     LinearGradient(
                         colors: [
@@ -54,12 +57,12 @@ struct TrackListItemView: View {
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(track.title)
-                            .font(.system(size: 16, weight: isActiveTrack ? .bold : .regular))
+                            .font(.system(size: 16, weight: isActiveTrack ? .bold : .semibold, design: .rounded))
                             .foregroundStyle(titleColor)
                             .lineLimit(1)
 
                         Text(track.artist)
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.system(size: 12, weight: .regular, design: .rounded))
                             .foregroundStyle(Color(red: 0.67, green: 0.67, blue: 0.67))
                             .lineLimit(1)
                     }
@@ -90,8 +93,13 @@ struct TrackListItemView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 12)
                 .frame(height: 72)
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.05))
+                    .frame(height: 0.5)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
             }
         }
         .buttonStyle(.plain)

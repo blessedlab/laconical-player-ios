@@ -67,7 +67,8 @@ struct LaconicalTopBar: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity)
         .frame(height: 58)
         .animation(.easeInOut(duration: 0.3), value: isSearchExpanded)
     }

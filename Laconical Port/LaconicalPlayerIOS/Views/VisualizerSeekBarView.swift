@@ -31,14 +31,20 @@ struct VisualizerSeekBarView: View {
                         style: .init(lineWidth: 2, lineCap: .round)
                     )
 
-                    context.saveGState()
-                    context.clip(to: CGRect(x: 0, y: 0, width: size.width * displayedProgress, height: size.height))
-                    context.stroke(
-                        path,
-                        with: .color(activeColor.opacity(0.9)),
-                        style: .init(lineWidth: 2.5, lineCap: .round)
-                    )
-                    context.restoreGState()
+                    context.drawLayer { layerContext in
+                        let playedRect = CGRect(
+                            x: 0,
+                            y: 0,
+                            width: size.width * displayedProgress,
+                            height: size.height
+                        )
+                        layerContext.clip(to: Path(playedRect))
+                        layerContext.stroke(
+                            path,
+                            with: .color(activeColor.opacity(0.9)),
+                            style: .init(lineWidth: 2.5, lineCap: .round)
+                        )
+                    }
 
                     if isDragging {
                         let lineX = size.width * dragProgress

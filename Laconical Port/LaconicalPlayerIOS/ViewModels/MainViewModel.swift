@@ -32,6 +32,9 @@ final class MainViewModel: ObservableObject {
     @Published var expandedFraction: CGFloat = 0
     @Published var isSearchExpanded = false
     @Published var showQueueSheet = false
+    @Published var showFileImporter = false
+    @Published var importStatusMessage = ""
+    @Published var showImportStatus = false
 
     private let mediaLibraryService: MediaLibraryService
     private let artworkColorService: ArtworkColorService
@@ -47,13 +50,13 @@ final class MainViewModel: ObservableObject {
         mediaLibraryService: MediaLibraryService = MediaLibraryService(),
         artworkColorService: ArtworkColorService = ArtworkColorService(),
         waveformExtractorService: WaveformExtractorService = WaveformExtractorService(),
-        playbackService: AudioPlaybackService = AudioPlaybackService(),
+        playbackService: AudioPlaybackService? = nil,
         playlistStore: PlaylistStore = PlaylistStore()
     ) {
         self.mediaLibraryService = mediaLibraryService
         self.artworkColorService = artworkColorService
         self.waveformExtractorService = waveformExtractorService
-        self.playbackService = playbackService
+        self.playbackService = playbackService ?? AudioPlaybackService()
         self.playlistStore = playlistStore
 
         bindPlayback()
@@ -138,6 +141,7 @@ final class MainViewModel: ObservableObject {
     }
 
     func bootstrap() async {
+        mediaLibraryService.ensureImportsFolderExists()
         permissionState = mediaLibraryService.authorizationStatus()
 
         switch permissionState {
@@ -145,19 +149,27 @@ final class MainViewModel: ObservableObject {
             await loadLibrary()
         case .notDetermined:
             permissionState = await mediaLibraryService.requestAuthorization()
-            if permissionState == .authorized {
-                await loadLibrary()
-            }
+            await loadLibrary()
         case .denied, .restricted:
-            break
+            await loadLibrary()
         }
     }
 
     func requestPermission() async {
         permissionState = await mediaLibraryService.requestAuthorization()
-        if permissionState == .authorized {
-            await loadLibrary()
-        }
+        await loadLibrary()
+    }
+
+    func importAudioFiles(from urls: [URL]) async {
+        guard !urls.isEmpty else { return }
+
+        let imported = mediaLibraryService.importAudioFiles(from: urls)
+        await loadLibrary()
+
+        importStatusMessage = imported > 0
+            ? "Imported \(imported) file\(imported == 1 ? "" : "s") to Imports."
+            : "No files were imported."
+        showImportStatus = true
     }
 
     func loadLibrary() async {

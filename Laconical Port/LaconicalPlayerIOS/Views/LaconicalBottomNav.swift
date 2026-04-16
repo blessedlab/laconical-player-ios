@@ -37,6 +37,7 @@ struct LaconicalBottomNav: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity)
         .background(
             ZStack {
                 Color.black

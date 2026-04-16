@@ -22,7 +22,7 @@ struct MiniPlayerView: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            RoundedRectangle(cornerRadius: 16)
+            Rectangle()
                 .fill(Color(red: 0.05, green: 0.05, blue: 0.06))
                 .overlay(
                     LinearGradient(
@@ -84,8 +84,8 @@ struct MiniPlayerView: View {
                 .frame(height: 3)
             }
         }
+        .frame(maxWidth: .infinity)
         .frame(height: 75)
-        .padding(.horizontal, 12)
         .padding(.bottom, 12)
     }
 

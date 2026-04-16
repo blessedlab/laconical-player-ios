@@ -9,6 +9,10 @@ import SwiftUI
 
 @main
 struct Laconical_PortApp: App {
+    init() {
+        MediaLibraryService().ensureImportsFolderExists()
+    }
+
     var body: some Scene {
         WindowGroup {
             LaconicalPlayerRootView()

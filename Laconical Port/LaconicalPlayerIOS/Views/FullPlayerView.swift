@@ -40,9 +40,15 @@ struct FullPlayerView: View {
         themeColor.mixed(with: Color(red: 0.04, green: 0.04, blue: 0.05), amount: 0.92)
     }
 
+    private let expandedMediaLiftOffset: CGFloat = 40
+    private let artistRowLiftOffset: CGFloat = 28
+    private let artistExtraLiftOffset: CGFloat = 14
+    private let heartExtraLiftOffset: CGFloat = 8
+
     var body: some View {
         ZStack {
             backgroundColor
+                .ignoresSafeArea(.container, edges: .horizontal)
 
             ParticlesEffectView(
                 color: activeSeekColor,
@@ -99,6 +105,7 @@ struct FullPlayerView: View {
                             .foregroundStyle(.gray)
                             .lineLimit(1)
                     }
+                    .offset(y: -artistExtraLiftOffset)
 
                     Spacer()
 
@@ -108,32 +115,37 @@ struct FullPlayerView: View {
                             .foregroundStyle(.white)
                     }
                     .buttonStyle(.plain)
+                    .offset(y: -heartExtraLiftOffset)
                 }
                 .padding(.horizontal, 24)
+                .offset(y: -artistRowLiftOffset)
 
-                Spacer().frame(height: 10)
+                VStack(spacing: 0) {
+                    Spacer().frame(height: 10)
 
-                VisualizerSeekBarView(
-                    waveform: waveform,
-                    progress: progress,
-                    duration: duration,
-                    activeColor: activeSeekColor,
-                    isPlaying: isPlaying,
-                    onSeek: onSeek
-                )
-                .padding(.horizontal, 24)
+                    VisualizerSeekBarView(
+                        waveform: waveform,
+                        progress: progress,
+                        duration: duration,
+                        activeColor: activeSeekColor,
+                        isPlaying: isPlaying,
+                        onSeek: onSeek
+                    )
+                    .padding(.horizontal, 24)
 
-                HStack {
-                    Text(currentTime.mmss)
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(.gray)
-                    Spacer()
-                    Text(duration.mmss)
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(.gray)
+                    HStack {
+                        Text(currentTime.mmss)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(.gray)
+                        Spacer()
+                        Text(duration.mmss)
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(.gray)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 8)
+                .offset(y: -expandedMediaLiftOffset)
 
                 // Ghost controls for spacing; morphing overlay provides actual controls.
                 HStack {
@@ -194,10 +206,9 @@ struct FullPlayerView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .opacity(expandedFraction)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

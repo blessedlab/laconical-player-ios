@@ -10,14 +10,16 @@ struct LibraryScreen: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let safeTop = proxy.safeAreaInsets.top
             let safeBottom = proxy.safeAreaInsets.bottom
 
             let miniPlayerHeight: CGFloat = 87
             let bottomNavHeight: CGFloat = 64
-            let peekHeight = miniPlayerHeight + bottomNavHeight + safeBottom
-            let collapsedTop = proxy.size.height - peekHeight
+            let peekHeight = miniPlayerHeight + bottomNavHeight
+            let collapsedTop = proxy.size.height + safeBottom - peekHeight
             let travel = max(collapsedTop, 1)
+            let contentBottomPadding = viewModel.currentTrack == nil
+                ? 0
+                : (peekHeight + safeBottom)
 
             let baseProgress = viewModel.currentTrack == nil ? 0 : sheetProgress
             let interactiveProgress = clamp(baseProgress + dragOffsetProgress, lower: 0, upper: 1)
@@ -32,7 +34,7 @@ struct LibraryScreen: View {
                     .ignoresSafeArea()
                     .animation(.easeInOut(duration: 1.0), value: targetBackground)
 
-                mainContent(safeTop: safeTop, bottomPadding: peekHeight)
+                mainContent(bottomPadding: contentBottomPadding)
 
                 if let currentTrack = viewModel.currentTrack {
                     sheetLayer(
@@ -41,7 +43,8 @@ struct LibraryScreen: View {
                         sheetTop: sheetTop,
                         miniAlpha: miniAlpha,
                         expandedFraction: interactiveProgress,
-                        travel: travel
+                        travel: travel,
+                        safeBottom: safeBottom
                     )
 
                     morphingOverlay(
@@ -50,12 +53,27 @@ struct LibraryScreen: View {
                         sheetTop: sheetTop,
                         expandedFraction: interactiveProgress
                     )
+
+                    if miniAlpha > 0.01 {
+                        // Reliable tap zone for expanding from mini-player body.
+                        // Keep the right control area free so play/prev/next remain tappable.
+                        Color.clear
+                            .frame(width: max(proxy.size.width - 140, 0), height: 75)
+                            .contentShape(Rectangle())
+                            .offset(y: sheetTop)
+                            .onTapGesture {
+                                expandSheet()
+                            }
+                    }
                 }
             }
             .task {
                 guard !didBootstrap else { return }
                 didBootstrap = true
                 await viewModel.bootstrap()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                Task { await viewModel.loadLibrary() }
             }
             .onChange(of: viewModel.currentTrack?.id) { newValue in
                 if newValue == nil {
@@ -68,6 +86,23 @@ struct LibraryScreen: View {
             .onChange(of: interactiveProgress) { newValue in
                 viewModel.expandedFraction = newValue
                 viewModel.isPlayerExpanded = newValue > 0.99
+            }
+            .fullScreenCover(isPresented: $viewModel.showFileImporter) {
+                AudioDocumentPickerView(
+                    onPicked: { urls in
+                        Task { await viewModel.importAudioFiles(from: urls) }
+                        viewModel.showFileImporter = false
+                    },
+                    onCancelled: {
+                        viewModel.showFileImporter = false
+                    }
+                )
+                .ignoresSafeArea()
+            }
+            .alert("Import", isPresented: $viewModel.showImportStatus) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(viewModel.importStatusMessage)
             }
             .sheet(isPresented: $viewModel.showQueueSheet) {
                 QueueSheetView(
@@ -85,24 +120,28 @@ struct LibraryScreen: View {
     }
 
     @ViewBuilder
-    private func mainContent(safeTop: CGFloat, bottomPadding: CGFloat) -> some View {
+    private func mainContent(bottomPadding: CGFloat) -> some View {
         switch viewModel.permissionState {
         case .authorized:
             VStack(spacing: 0) {
-                Spacer().frame(height: safeTop)
-
                 LaconicalTopBar(
                     searchQuery: $viewModel.searchQuery,
-                    isSearchExpanded: $viewModel.isSearchExpanded
+                    isSearchExpanded: $viewModel.isSearchExpanded,
+                    onSettingsTap: {
+                        viewModel.showFileImporter = true
+                    }
                 )
 
                 ScrollView {
                     LazyVStack(spacing: 0, pinnedViews: []) {
                         categoryContent
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.bottom, bottomPadding)
                 }
+                .frame(maxWidth: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
         case .notDetermined:
             permissionStateView(
@@ -115,15 +154,41 @@ struct LibraryScreen: View {
             )
 
         case .denied, .restricted:
-            permissionStateView(
-                title: "Laconical",
-                subtitle: "Enable media library access in Settings to browse songs",
-                buttonTitle: "Open Settings",
-                action: {
-                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                    UIApplication.shared.open(url)
+            if viewModel.allTracks.isEmpty {
+                permissionStateView(
+                    title: "Laconical",
+                    subtitle: "Enable media library access in Settings, or add mp3 files to Files > On My iPhone > Laconical Port > Imports.",
+                    buttonTitle: "Open Settings",
+                    secondaryButtonTitle: "Import Audio Files",
+                    action: {
+                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                        UIApplication.shared.open(url)
+                    },
+                    secondaryAction: {
+                        viewModel.showFileImporter = true
+                    }
+                )
+            } else {
+                VStack(spacing: 0) {
+                    LaconicalTopBar(
+                        searchQuery: $viewModel.searchQuery,
+                        isSearchExpanded: $viewModel.isSearchExpanded,
+                        onSettingsTap: {
+                            viewModel.showFileImporter = true
+                        }
+                    )
+
+                    ScrollView {
+                        LazyVStack(spacing: 0, pinnedViews: []) {
+                            categoryContent
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, bottomPadding)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-            )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
         }
     }
 
@@ -132,7 +197,17 @@ struct LibraryScreen: View {
         switch viewModel.selectedCategory {
         case .tracks:
             if viewModel.filteredTracks.isEmpty {
-                emptyState(text: "No tracks found")
+                VStack(spacing: 12) {
+                    emptyState(
+                        text: "No tracks found. Add mp3 or m4a files to Files > On My iPhone > Laconical Port > Imports, then reopen the app."
+                    )
+
+                    Button("Import Audio Files") {
+                        viewModel.showFileImporter = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(.top, 24)
             } else {
                 ForEach(viewModel.filteredTracks) { track in
                     trackRow(track)
@@ -264,7 +339,8 @@ struct LibraryScreen: View {
         sheetTop: CGFloat,
         miniAlpha: CGFloat,
         expandedFraction: CGFloat,
-        travel: CGFloat
+        travel: CGFloat,
+        safeBottom: CGFloat
     ) -> some View {
         ZStack(alignment: .top) {
             FullPlayerView(
@@ -294,7 +370,7 @@ struct LibraryScreen: View {
                     viewModel.showQueueSheet = true
                 }
             )
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            .frame(width: proxy.size.width, height: proxy.size.height + safeBottom)
 
             if miniAlpha > 0.01 {
                 VStack(spacing: 0) {
@@ -329,8 +405,10 @@ struct LibraryScreen: View {
                     )
                     .opacity(miniAlpha)
                 }
+                .frame(maxWidth: .infinity, alignment: .top)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .offset(y: sheetTop)
         .gesture(
             DragGesture()
@@ -363,10 +441,11 @@ struct LibraryScreen: View {
         let miniArtSize: CGFloat = 52
         let miniArtLeft: CGFloat = 24
         let miniArtTop = sheetTop + 11.5
+        let expandedMediaLiftOffset: CGFloat = 40
 
         let fullArtSize = (width - 48) * 0.95
         let fullArtLeft = (width - fullArtSize) / 2
-        let fullArtTop = safeTop + 16 + 48 + 64
+        let fullArtTop = safeTop + 16 + 48 + 64 - expandedMediaLiftOffset
 
         let morphSize = lerp(miniArtSize, fullArtSize, expandedFraction)
         let morphLeft = lerp(miniArtLeft, fullArtLeft, expandedFraction)
@@ -378,11 +457,13 @@ struct LibraryScreen: View {
         let shapedAmplitude = amplitude * amplitude
         let pulseIntensity = clamp((expandedFraction - 0.7) / 0.3, lower: 0, upper: 1)
         let pulseScale = 1 - (0.02 * pulseIntensity) + (shapedAmplitude * 0.04 * pulseIntensity)
+        let expandedDropOffset: CGFloat = 40
+        let titleExtraLiftOffset: CGFloat = 8
 
         let miniTitleLeft = miniArtLeft + miniArtSize + 12
         let miniTitleTop = miniArtTop + 2
         let fullTitleLeft: CGFloat = 48
-        let fullTitleTop = fullArtTop + fullArtSize + 70
+        let fullTitleTop = fullArtTop + fullArtSize + 70 + expandedDropOffset + expandedMediaLiftOffset - titleExtraLiftOffset
 
         let titleLeft = lerp(miniTitleLeft, fullTitleLeft, expandedFraction)
         let titleTop = lerp(miniTitleTop, fullTitleTop, expandedFraction)
@@ -398,7 +479,7 @@ struct LibraryScreen: View {
         let miniPlayX = width - 96
         let miniNextX = width - 48
 
-        let fullCenterY = proxy.size.height - safeBottom - 170
+        let fullCenterY = proxy.size.height - 110 + expandedDropOffset
         let fullPrevX = width * 0.22
         let fullPlayX = width * 0.5
         let fullNextX = width * 0.78
@@ -497,7 +578,9 @@ struct LibraryScreen: View {
         title: String,
         subtitle: String,
         buttonTitle: String,
-        action: @escaping () -> Void
+        secondaryButtonTitle: String? = nil,
+        action: @escaping () -> Void,
+        secondaryAction: (() -> Void)? = nil
     ) -> some View {
         VStack(spacing: 16) {
             Text(title)
@@ -510,6 +593,11 @@ struct LibraryScreen: View {
 
             Button(buttonTitle, action: action)
                 .buttonStyle(.borderedProminent)
+
+            if let secondaryButtonTitle, let secondaryAction {
+                Button(secondaryButtonTitle, action: secondaryAction)
+                    .buttonStyle(.bordered)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
