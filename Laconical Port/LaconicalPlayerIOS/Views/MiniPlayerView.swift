@@ -63,7 +63,6 @@ struct MiniPlayerView: View {
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Color(red: 0.73, green: 0.73, blue: 0.73))
                             .lineLimit(1)
-                            .padding(.leading, 7)
                     }
 
                     Spacer(minLength: 4)

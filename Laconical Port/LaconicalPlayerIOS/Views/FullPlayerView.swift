@@ -46,8 +46,9 @@ struct FullPlayerView: View {
     private let artistExtraLiftOffset: CGFloat = 14
     private let heartExtraLiftOffset: CGFloat = 8
     private let artistDropOffset: CGFloat = 28
-    private let artistRightOffset: CGFloat = -5
-    private let heartDropOffset: CGFloat = 40
+    private let artistRightOffset: CGFloat = 4
+    private let heartDropOffset: CGFloat = 18
+    private let topHeaderDropOffset: CGFloat = 36
 
     var body: some View {
         ZStack {
@@ -85,6 +86,7 @@ struct FullPlayerView: View {
                     .buttonStyle(.plain)
                 }
                 .frame(height: 48)
+                .offset(y: topHeaderDropOffset * expandedFraction)
 
                 Spacer().frame(height: 64)
 

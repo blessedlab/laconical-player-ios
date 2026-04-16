@@ -14,6 +14,7 @@ struct LibraryScreen: View {
     }
 
     private let quickSwipeDistance: CGFloat = 64
+    private let expandedPlayerLift: CGFloat = 36
 
     var body: some View {
         GeometryReader { proxy in
@@ -26,7 +27,7 @@ struct LibraryScreen: View {
             let collapsedTop = proxy.size.height + safeBottom - peekHeight
             let travel = max(collapsedTop, 1)
             let contentBottomPadding = viewModel.currentTrack == nil
-                ? 0
+                ? (bottomNavHeight + safeBottom)
                 : (peekHeight + safeBottom)
 
             let baseProgress = viewModel.currentTrack == nil ? 0 : sheetProgress
@@ -77,22 +78,22 @@ struct LibraryScreen: View {
                                 }
                         }
                     }
+                    .offset(y: -expandedPlayerLift * interactiveProgress)
                     .simultaneousGesture(sheetDragGesture(travel: travel))
-
-                    if miniAlpha > 0.01 {
-                        LaconicalBottomNav(
-                            selectedCategory: Binding(
-                                get: { viewModel.selectedCategory },
-                                set: { viewModel.setSelectedCategory($0) }
-                            ),
-                            dynamicColor: viewModel.playingTrackDominantColor
-                        )
-                        .opacity(miniAlpha)
-                        .allowsHitTesting(miniAlpha > 0.02)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .ignoresSafeArea(.container, edges: .bottom)
-                    }
                 }
+
+                let navOpacity = viewModel.currentTrack == nil ? 1 : miniAlpha
+                LaconicalBottomNav(
+                    selectedCategory: Binding(
+                        get: { viewModel.selectedCategory },
+                        set: { viewModel.setSelectedCategory($0) }
+                    ),
+                    dynamicColor: viewModel.playingTrackDominantColor
+                )
+                .opacity(navOpacity)
+                .allowsHitTesting(navOpacity > 0.02)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .ignoresSafeArea(.container, edges: .bottom)
             }
             .onAppear {
                 if rawSafeBottom > 0 {
